@@ -1,0 +1,1 @@
+{"version":3,"sources":["app/admin/admin.module.js"],"names":["angular","module"],"mappings":"AAAA;;AAEAA,QAAQC,MAAR,CAAe,oCAAf,EAAqD,CAAC,mCAAD,EACnD,SADmD,CAArD","file":"admin.module.js","sourcesContent":["'use strict';\n\nangular.module('yeomanOnlineTicketBookingApp.admin', ['yeomanOnlineTicketBookingApp.auth',\n  'ngRoute'\n]);\n"]}
