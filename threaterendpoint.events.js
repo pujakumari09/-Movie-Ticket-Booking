@@ -1,0 +1,33 @@
+/**
+ * Threaterendpoint model events
+ */
+
+'use strict';
+
+import {EventEmitter} from 'events';
+import Threaterendpoint from './threaterendpoint.model';
+var ThreaterendpointEvents = new EventEmitter();
+
+// Set max event listeners (0 == unlimited)
+ThreaterendpointEvents.setMaxListeners(0);
+
+// Model events
+var events = {
+  'save': 'save',
+  'remove': 'remove'
+};
+
+// Register the event emitter to the model events
+for (var e in events) {
+  var event = events[e];
+  Threaterendpoint.schema.post(e, emitEvent(event));
+}
+
+function emitEvent(event) {
+  return function(doc) {
+    ThreaterendpointEvents.emit(event + ':' + doc._id, doc);
+    ThreaterendpointEvents.emit(event, doc);
+  }
+}
+
+export default ThreaterendpointEvents;

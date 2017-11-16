@@ -1,85 +1,123 @@
 'use strict';
 
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+import User from './user.model';
+import passport from 'passport';
+import config from '../../config/environment';
+import jwt from 'jsonwebtoken';
 
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+function validationError(res, statusCode) {
+  statusCode = statusCode || 422;
+  return function(err) {
+    res.status(statusCode).json(err);
+  }
+}
 
-(function () {
-  var UserComponent = function () {
-    function UserComponent($http, $scope, socket) {
-      _classCallCheck(this, UserComponent);
+function handleError(res, statusCode) {
+  statusCode = statusCode || 500;
+  return function(err) {
+    res.status(statusCode).send(err);
+  };
+}
 
-      this.$http = $http;
-      this.socket = socket;
-      this.mappingDetail = [];
-      this.bookingDetail = [];
-      this.k = [];
+/**
+ * Get list of users
+ * restriction: 'admin'
+ */
+export function index(req, res) {
+  return User.find({}, '-salt -password').exec()
+    .then(users => {
+      res.status(200).json(users);
+    })
+    .catch(handleError(res));
+}
 
-      $scope.$on('$destroy', function () {
-        socket.unsyncUpdates('userendpoint');
+/**
+ * Creates a new user
+ */
+export function create(req, res, next) {
+  var newUser = new User(req.body);
+  newUser.provider = 'local';
+  newUser.role = 'user';
+  newUser.save()
+    .then(function(user) {
+      var token = jwt.sign({ _id: user._id }, config.secrets.session, {
+        expiresIn: 60 * 60 * 5
       });
+      res.json({ token });
+    })
+    .catch(validationError(res));
+}
 
-      $scope.submitForm = function (isValid) {
-        if (isValid) {
-          alert('Detail is Valid');
-        }
-      };
-    }
+/**
+ * Get a single user
+ */
+export function show(req, res, next) {
+  var userId = req.params.id;
 
-    _createClass(UserComponent, [{
-      key: '$onInit',
-      value: function $onInit() {
-        var _this = this;
-
-        this.$http.get('/api/mappingendpoints').then(function (response) {
-          _this.mappingDetail = response.data;
-          console.log(_this.mappingDetail);
-          _this.socket.syncUpdates('mappingendpoint', _this.mappingDetail);
-        });
-        this.$http.get('/api/userendpoints').then(function (response) {
-          _this.bookingDetail = response.data;
-          _this.socket.syncUpdates('userendpoint', _this.bookingDetail);
-        });
-        this.k = sessionStorage.getItem('MovieData');
-        // alert(this.k);
+  return User.findById(userId).exec()
+    .then(user => {
+      if (!user) {
+        return res.status(404).end();
       }
-    }, {
-      key: 'setDetails',
-      value: function setDetails(mdetails) {
-        sessionStorage.setItem('mdetail', mdetails.k);
-        alert('mdetail');
-        sessionStorage.setItem('cdetail', mdetails.Cname);
-        sessionStorage.setItem('sddetail', mdetails.ShowDate);
-        sessionStorage.setItem('ldetail', mdetails.Lname);
-        sessionStorage.setItem('tdetail', mdetails.Thname);
-        sessionStorage.setItem('stdetail', mdetails.ShowTime);
+      res.json(user.profile);
+    })
+    .catch(err => next(err));
+}
+
+/**
+ * Deletes a user
+ * restriction: 'admin'
+ */
+export function destroy(req, res) {
+  return User.findByIdAndRemove(req.params.id).exec()
+    .then(function() {
+      res.status(204).end();
+    })
+    .catch(handleError(res));
+}
+
+/**
+ * Change a users password
+ */
+export function changePassword(req, res, next) {
+  var userId = req.user._id;
+  var oldPass = String(req.body.oldPassword);
+  var newPass = String(req.body.newPassword);
+
+  return User.findById(userId).exec()
+    .then(user => {
+      if (user.authenticate(oldPass)) {
+        user.password = newPass;
+        return user.save()
+          .then(() => {
+            res.status(204).end();
+          })
+          .catch(validationError(res));
+      } else {
+        return res.status(403).end();
       }
-    }, {
-      key: 'bookingDetails',
-      value: function bookingDetails(sdetails) {
-        sessionStorage.setItem('seatdetail', sdetails.Seats);
-        sessionStorage.setItem('nseatdetail', sdetails.Nseat);
-        sessionStorage.setItem('amountdetail', sdetails.Amount);
+    });
+}
+
+/**
+ * Get my info
+ */
+export function me(req, res, next) {
+  var userId = req.user._id;
+
+  return User.findOne({ _id: userId }, '-salt -password').exec()
+    .then(user => { // don't ever give out the password or salt
+      if (!user) {
+        return res.status(401).end();
       }
+      res.json(user);
+    })
+    .catch(err => next(err));
+}
 
-      // seatDetails() {
-      //   this.$http.post('/api/userendpoints', {
-      //     SelectedSeat: this.bookingDetail,
-      //     Class: this.bookingDetail,
-      //     SeatNo: this.bookingDetail,
-      //     Amount: this.bookingDetail
-      //   });
-      // }
-
-    }]);
-
-    return UserComponent;
-  }();
-
-  angular.module('yeomanOnlineTicketBookingApp').component('user', {
-    templateUrl: 'app/user/user.html',
-    controller: UserComponent,
-    controllerAs: 'userCtrl'
-  });
-})();
-//# sourceMappingURL=user.controller.js.map
+/**
+ * Authentication callback
+ */
+export function authCallback(req, res, next) {
+  res.redirect('/');
+}
